@@ -36,6 +36,9 @@
     <ClInclude Include="AutoTestResult.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="conf.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AutoTest.cpp">
