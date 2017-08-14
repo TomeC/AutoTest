@@ -1,7 +1,11 @@
 AutoTest --- 基于MFC的批量TCP接口测试应用
 ======================================
+
 ### 安装
-直接[下载](Release/AutoTest.exe)目录Release/AutoTest.exe，双击执行即可。
+1. x86: [下载](Release/AutoTest.exe)
+2. x64: [下载](x64/Release/AutoTest.exe) <br />
+
+同时下载/x64/Release/server.conf到应用的目录下，配置服务器ip和端口后，直接双击即可运行
 
 ### 使用介绍
 1. server.conf里的ip和port会自动加载到界面的输入框，可以随意修改
