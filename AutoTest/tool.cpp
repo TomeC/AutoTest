@@ -1,25 +1,24 @@
 #include "stdafx.h"
 #include "tool.h"
 
-vector<CString> CTool::split_msg(const CString& msg)
+vector<CString> CTool::split_msg(CString& msg)
 {
     vector<CString> vResult;
-    CString temp = msg;
     if (msg.GetLength() == 0)
     {
         return vResult;
     }
-    temp.Trim();
     int pos = msg.Find('#');
     if (pos == -1)
     {
-        vResult.push_back(temp);
+        msg.Trim();
+        vResult.push_back(msg);
         vResult.push_back(CString(""));
     }
     else
     {
-        vResult.push_back(temp.Left(pos));
-        vResult.push_back(temp.Right(temp.GetLength() - pos - 1));
+        vResult.push_back(msg.Left(pos).Trim());
+        vResult.push_back(msg.Right(msg.GetLength() - pos - 1).Trim());
     }
     
     return vResult;

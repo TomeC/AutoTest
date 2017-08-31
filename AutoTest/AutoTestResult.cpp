@@ -23,12 +23,37 @@ CAutoTestResult::~CAutoTestResult()
 
 void CAutoTestResult::Init()
 {
-    m_list_box = (CListBox*)GetDlgItem(IDC_LIST1);
+    m_list_ctrl = (CListCtrl*)GetDlgItem(IDC_LIST3);
+
+    LONG Styles = GetWindowLong(m_list_ctrl->m_hWnd, GWL_STYLE);
+    SetWindowLong(m_list_ctrl->m_hWnd, GWL_STYLE, Styles | LVS_REPORT);
+    m_list_ctrl->InsertColumn(0, "预期结果", LVCFMT_LEFT, 140);
+    m_list_ctrl->InsertColumn(1, "返回结果", LVCFMT_LEFT, 400);
 }
 
-void CAutoTestResult::AddList(const char* data)
+void CAutoTestResult::AddList(const char* data, int line, int colum)
 {
-    m_list_box->InsertString(m_list_box->GetCount(), data);
+    if (data == NULL)
+    {
+        return;
+    }
+    if (line > m_list_ctrl->GetItemCount())
+    {
+        line = m_list_ctrl->GetItemCount();
+    }
+    if (colum == 0)
+    {
+        m_list_ctrl->InsertItem(line, data);
+    }
+    else
+    {
+        m_list_ctrl->SetItemText(line, colum, data);
+    }
+}
+
+void CAutoTestResult::ClearAllItem()
+{
+    m_list_ctrl->DeleteAllItems();
 }
 
 void CAutoTestResult::DoDataExchange(CDataExchange* pDX)

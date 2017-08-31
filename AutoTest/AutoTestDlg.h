@@ -48,13 +48,18 @@ public:
 private:
     bool GetMsgFromNet();
     bool GetMsgFromNet(CString& req_msg);
+    bool LoadFileToList();
 
 private:
     CListBox* m_list_box;
     CProgressCtrl* m_progress;
     CAutoTestResult* m_result_form;
+    CString m_file_path;
 
 public:
     afx_msg void OnLbnDblclkList1();
     afx_msg void OnLbnSclkList1();
+    afx_msg void OnBnClickedButton2();
+//    afx_msg void OnTimer(UINT_PTR nIDEvent);
+//    afx_msg void OnTimer(UINT_PTR nIDEvent);
 };

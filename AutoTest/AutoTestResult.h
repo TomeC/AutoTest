@@ -12,7 +12,8 @@ public:
 	virtual ~CAutoTestResult();
 
 	void Init();
-	void AddList(const char* data);
+	void AddList(const char* data, int line, int colum);
+    void ClearAllItem();
 
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
@@ -25,5 +26,5 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 private:
-	CListBox* m_list_box;
+	CListCtrl* m_list_ctrl;
 };

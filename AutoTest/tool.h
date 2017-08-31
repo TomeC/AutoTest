@@ -6,5 +6,5 @@
 class CTool
 {
 public:
-    static vector<CString> split_msg(const CString& msg);
+    static vector<CString> split_msg(CString& msg);
 };

@@ -1,12 +1,12 @@
-
 // AutoTestDlg.cpp : 实现文件
-//
 
 #include "stdafx.h"
 #include "AutoTest.h"
 #include "AutoTestDlg.h"
 #include "afxdialogex.h"
 #include "conf.h"
+#include "tool.h"
+#include "Net.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -48,9 +48,6 @@ END_MESSAGE_MAP()
 
 
 // CAutoTestDlg 对话框
-
-
-
 CAutoTestDlg::CAutoTestDlg(CWnd* pParent /*=NULL*/)
     : CDialogEx(IDD_AUTOTEST_DIALOG, pParent)
 {
@@ -71,10 +68,9 @@ BEGIN_MESSAGE_MAP(CAutoTestDlg, CDialogEx)
     ON_BN_CLICKED(IDC_BUTTON1, &CAutoTestDlg::OnBnClickedButton1)
     ON_LBN_DBLCLK(IDC_LIST1, &CAutoTestDlg::OnLbnDblclkList1)
     ON_LBN_SELCHANGE(IDC_LIST1, &CAutoTestDlg::OnLbnSclkList1)
-//    ON_WM_MOUSEMOVE()
 ON_WM_MOUSEMOVE()
-//ON_WM_LBUTTONUP()
 ON_WM_LBUTTONUP()
+ON_BN_CLICKED(IDC_BUTTON2, &CAutoTestDlg::OnBnClickedButton2)
 END_MESSAGE_MAP()
 
 
@@ -106,21 +102,27 @@ BOOL CAutoTestDlg::OnInitDialog()
     SetIcon(m_hIcon, FALSE);        // 设置小图标
 
     m_list_box = (CListBox*)GetDlgItem(IDC_LIST1);
+
     Conf cf;
+#ifdef DEBUG
+    if (cf.LoadConf("C:\\Users\\kunwang\\Documents\\Visual Studio 2015\\Projects\\AutoTest\\bin\\x64\\Debug\\server.conf") != 0)
+#else
     if (cf.LoadConf("server.conf") != 0)
+#endif
     {
         AfxMessageBox("载入服务器配置失败");
         return FALSE;
     }
     GetDlgItem(IDC_EDIT1)->SetWindowText(cf.getString("server", "port").c_str());
     GetDlgItem(IDC_IPADDRESS1)->SetWindowText(cf.getString("server", "ip").c_str());
+    CTimeOutSocket::m_TimeOut = cf.getInt("server", "timeout");
+
     m_progress = (CProgressCtrl *)GetDlgItem(IDC_PROGRESS1);
     m_progress->SetRange(0, 1000);
 
     m_result_form = new CAutoTestResult();
     m_result_form->Create(IDD_DIALOG_Result, this);
     m_result_form->Init();
-
     return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -176,38 +178,25 @@ void CAutoTestDlg::OnBnClickedOk()
 
 void CAutoTestDlg::OnBnClickedButton1()
 {
-    // TODO: 在此添加控件通知处理程序代码
+    // 刷新listbox里的数据
     BOOL isOpen = TRUE;
     CString filter = "文件 (*.txt; *.dat)|*.txt; *.dat||";
     CFileDialog openFileDlg(isOpen, NULL, NULL, OFN_HIDEREADONLY | OFN_READONLY, filter, NULL);
     INT_PTR result = openFileDlg.DoModal();
-    CString filePath;
     if (result != IDOK) 
     {
         return;
     }
-    filePath = openFileDlg.GetPathName();
-    CStdioFile file;
-    BOOL ret = file.Open(filePath, CFile::modeRead | CFile::shareDenyNone);
-    if (!ret)
-    {
-        AfxMessageBox("打开文件失败");
-        return;
-    }
-    file.SeekToBegin();
+    m_file_path = openFileDlg.GetPathName();
+    LoadFileToList();
 
-    // 循环读取文件
-    CString cstrLine;
-    while (file.ReadString(cstrLine))
-    {
-        m_list_box->InsertString(m_list_box->GetCount(), cstrLine);
-    }
     m_progress->SetStep(1000 / m_list_box->GetCount());
 }
 
+// 自动处理全部数据
 bool CAutoTestDlg::GetMsgFromNet()
 {
-    CSocket aSocket;
+    CTimeOutSocket aSocket(this);
     CString strIP;
     CString strPort;
     CString strText;
@@ -225,6 +214,8 @@ bool CAutoTestDlg::GetMsgFromNet()
     if (aSocket.Connect(strIP, nPort))
     {
         char szRecValue[1024];
+        int pos = 0;
+        m_result_form->ClearAllItem();
         for (int i = 0; i < m_list_box->GetCount(); ++i)
         {
             memset(szRecValue, 0, sizeof(szRecValue));
@@ -233,7 +224,11 @@ bool CAutoTestDlg::GetMsgFromNet()
             {
                 continue;
             }
-            aSocket.Send(strText.GetBuffer(strText.GetLength()), strText.GetLength());
+
+            vector<CString> vcs = CTool::split_msg(strText);
+            CString temp = vcs[0];
+            temp.Append("\r\n");
+            aSocket.Send(temp.GetBuffer(temp.GetLength()), temp.GetLength());
             aSocket.Receive((void *)szRecValue, 1024);
             int nLen = MultiByteToWideChar(CP_UTF8, 0, szRecValue, -1, NULL, 0);
             WCHAR* pWstr = new WCHAR[nLen + 1];
@@ -241,7 +236,9 @@ bool CAutoTestDlg::GetMsgFromNet()
             ::MultiByteToWideChar(CP_UTF8, 0, szRecValue, -1, pWstr, nLen);
             std::string strAnsi(_bstr_t((wchar_t*)pWstr));
             delete[] pWstr;
-            m_result_form->AddList(strAnsi.c_str());
+
+            m_result_form->AddList(vcs[1].GetBuffer(vcs[1].GetLength()), pos, 0);
+            m_result_form->AddList(strAnsi.c_str(), pos++, 1);
             m_progress->StepIt();
         }
     }
@@ -250,7 +247,6 @@ bool CAutoTestDlg::GetMsgFromNet()
         MessageBox("connect failed");
     }
 
-    //关闭
     aSocket.Close();
     m_progress->SetPos(0);
 
@@ -258,13 +254,15 @@ bool CAutoTestDlg::GetMsgFromNet()
     return true;
 }
 
+// 双击某个list条目
 bool CAutoTestDlg::GetMsgFromNet(CString& req_msg)
 {
-    if (req_msg.GetLength() == 0 || req_msg[0] == '#')
+    vector<CString> vcs = CTool::split_msg(req_msg);
+    if (vcs.size() == 0 || vcs[0].GetLength() == 0)
     {
         return true;
     }
-    CSocket aSocket;
+    CTimeOutSocket aSocket(this);
     CString strIP;
     CString strPort;
     GetDlgItem(IDC_IPADDRESS1)->GetWindowTextA(strIP);
@@ -275,15 +273,17 @@ bool CAutoTestDlg::GetMsgFromNet(CString& req_msg)
         MessageBox("create failed");
         return false;
     }
+    int nNetTimeout = 1000;
 
     int nPort;
     sscanf_s(strPort, "%d", &nPort);
     if (aSocket.Connect(strIP, nPort))
     {
         char szRecValue[1024];
-
         memset(szRecValue, 0, sizeof(szRecValue));
-        aSocket.Send(req_msg.GetBuffer(req_msg.GetLength()), req_msg.GetLength());
+        CString temp = vcs[0];
+        temp.Append("\r\n");
+        aSocket.Send(temp.GetBuffer(temp.GetLength()), temp.GetLength());
         aSocket.Receive((void *)szRecValue, 1024);
         int nLen = MultiByteToWideChar(CP_UTF8, 0, szRecValue, -1, NULL, 0);
         WCHAR* pWstr = new WCHAR[nLen + 1];
@@ -299,8 +299,44 @@ bool CAutoTestDlg::GetMsgFromNet(CString& req_msg)
         MessageBox("connect failed");
     }
 
-    //关闭
     aSocket.Close();
+    return true;
+}
+
+// 加载文件
+bool CAutoTestDlg::LoadFileToList()
+{
+    CStdioFile file;
+    BOOL ret = file.Open(m_file_path, CFile::modeRead | CFile::shareDenyNone);
+    if (!ret)
+    {
+        AfxMessageBox("打开文件失败");
+        return false;
+    }
+    
+    // 循环读取文件
+    CString cstrLine;
+    m_list_box->ResetContent();
+
+    // 读取server配置
+    file.ReadString(cstrLine);
+    if (cstrLine.Find("server") == 0)
+    {
+        int midpos = cstrLine.Find(':');
+        int endpos = cstrLine.Find(']');
+        if (midpos != -1 || endpos != -1)
+        {
+            GetDlgItem(IDC_IPADDRESS1)->SetWindowText(cstrLine.Mid(7, midpos-7));
+            GetDlgItem(IDC_EDIT1)->SetWindowText(cstrLine.Mid(midpos+1, endpos-midpos-1));
+        }
+    }
+    
+    // 写入到listbox中
+    while (file.ReadString(cstrLine))
+    {
+        m_list_box->InsertString(m_list_box->GetCount(), cstrLine);
+    }
+    file.Close();
     return true;
 }
 
@@ -329,3 +365,8 @@ void CAutoTestDlg::OnLbnSclkList1()
     }
 }
 
+// 重新加载文件 
+void CAutoTestDlg::OnBnClickedButton2()
+{
+    LoadFileToList();
+}
